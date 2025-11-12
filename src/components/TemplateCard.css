@@ -1,0 +1,25 @@
+.template-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.2rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.template-card-header h4 {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.template-desc {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.template-card-empty {
+  padding: 1rem;
+  text-align: center;
+  border: 1px dashed var(--border-color);
+  border-radius: 10px;
+  color: var(--text-muted);
+}

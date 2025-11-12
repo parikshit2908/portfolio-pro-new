@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../supabase/config";
 import {
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -17,29 +18,14 @@ import "./Dashboard.css";
 
 export default function Dashboard() {
   const [analytics, setAnalytics] = useState([]);
-  const [totalUsers, setTotalUsers] = useState(0);
   const [totalVisits, setTotalVisits] = useState(0);
+  const [todayVisits, setTodayVisits] = useState(0);
+  const [activeUsers, setActiveUsers] = useState(0);
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
 
-  // Sidebar responsive toggle
-  useEffect(() => {
-    const handleResize = () => {
-      setSidebarOpen(window.innerWidth >= 992);
-    };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  const handleNavClick = () => {
-    if (window.innerWidth < 992) setSidebarOpen(false);
-  };
-
-  // 🔄 Fetch analytics data from Supabase
+  // 🧩 Fetch analytics data
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
@@ -51,21 +37,21 @@ export default function Dashboard() {
         if (error) throw error;
 
         setAnalytics(data || []);
-        setTotalUsers(data.length);
-        const visits = data.reduce((sum, item) => sum + (item.visits || 0), 0);
-        setTotalVisits(visits);
+        const total = data.reduce((sum, r) => sum + (r.visits || 0), 0);
+        const today = new Date().toISOString().split("T")[0];
+        const todayCount = data.find((r) => r.date === today)?.visits || 0;
+
+        setTotalVisits(total);
+        setTodayVisits(todayCount);
         setLastUpdated(new Date().toLocaleTimeString());
       } catch (err) {
         console.error("Error fetching analytics:", err.message);
-        setAnalytics([]);
-        setTotalUsers(0);
-        setTotalVisits(0);
       }
     };
 
     fetchAnalytics();
 
-    // Optional: real-time updates if you want live analytics
+    // Realtime updates
     const channel = supabase
       .channel("analytics-updates")
       .on(
@@ -78,201 +64,201 @@ export default function Dashboard() {
     return () => supabase.removeChannel(channel);
   }, []);
 
-  const handleLogout = async () => {
-    await logout();
-    navigate("/");
-  };
+  // 🧾 Record unique daily visit (once per user/day)
+  useEffect(() => {
+    let hasTracked = false;
 
-  const isActive = (path) => location.pathname === path;
+    const recordVisit = async () => {
+      if (hasTracked) return;
+      hasTracked = true;
 
-  const menuItems = [
-    { path: "/create-portfolio", icon: "bi-file-earmark-plus", label: "Create Portfolio" },
-    { path: "/customize-templates", icon: "bi-palette", label: "Customize Templates" },
-    { path: "/upload-resume", icon: "bi-file-earmark-arrow-up", label: "Upload Resume" },
-    { path: "/upload-portfolio", icon: "bi-cloud-upload", label: "Upload Portfolio" },
-    { path: "/settings", icon: "bi-gear", label: "Settings" },
-  ];
+      const today = new Date().toISOString().split("T")[0];
+      const userId = user?.id || "guest";
+
+      const { data: existing, error: fetchError } = await supabase
+        .from("analytics")
+        .select("id, visits, visitors")
+        .eq("date", today)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error("Fetch error:", fetchError.message);
+        return;
+      }
+
+      if (existing) {
+        const visitors = existing.visitors || [];
+        if (!visitors.includes(userId)) {
+          visitors.push(userId);
+          await supabase
+            .from("analytics")
+            .update({
+              visits: existing.visits + 1,
+              visitors,
+            })
+            .eq("id", existing.id);
+        }
+      } else {
+        await supabase.from("analytics").insert([
+          { date: today, visits: 1, visitors: [userId] },
+        ]);
+      }
+    };
+
+    recordVisit();
+  }, [user]);
+
+  // 🧠 Fetch total users
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const { data, error } = await supabase.auth.admin.listUsers();
+      if (!error && data?.users) setActiveUsers(data.users.length);
+    };
+    fetchUsers();
+  }, []);
 
   return (
-    <div className="dashboard-container">
-      {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div
-          className="sidebar-overlay"
-          onClick={() => setSidebarOpen(false)}
-          aria-label="Close sidebar"
-        ></div>
-      )}
+    <div className="dashboard-wrapper container py-5">
+      {/* Header */}
+      <motion.header
+        className="dashboard-header text-center mb-5"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
+        <h1 className="dashboard-title">Dashboard Overview</h1>
+        <p className="dashboard-subtitle">
+          Welcome back,{" "}
+          <span className="fw-semibold text-accent">
+            {user?.user_metadata?.display_name ||
+              user?.email?.split("@")[0] ||
+              "User"}
+          </span>{" "}
+          👋
+        </p>
+      </motion.header>
 
-      {/* Sidebar */}
-      <aside className={`dashboard-sidebar ${sidebarOpen ? "open" : "closed"}`}>
-        <div className="sidebar-header">
-          <h2 className="sidebar-logo">
-            <i className="bi bi-kanban"></i> PortfolioPro
-          </h2>
-          <button
-            className="sidebar-toggle"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            aria-label="Toggle sidebar"
-          >
-            <i className={`bi ${sidebarOpen ? "bi-chevron-left" : "bi-chevron-right"}`}></i>
-          </button>
-        </div>
-
-        {/* User Info */}
-        <div className="sidebar-user">
-          <div className="user-avatar">
-            {user?.user_metadata?.avatar_url ? (
-              <img src={user.user_metadata.avatar_url} alt={user.user_metadata.display_name} />
-            ) : (
-              <i className="bi bi-person-circle"></i>
-            )}
+      {/* Stats */}
+      <section className="dashboard-stats-grid mb-5">
+        <motion.div
+          className="stat-card"
+          whileHover={{ scale: 1.03 }}
+          transition={{ type: "spring", stiffness: 120 }}
+        >
+          <i className="bi bi-graph-up-arrow stat-icon pink"></i>
+          <div>
+            <h4>{totalVisits}</h4>
+            <p>Total Visits</p>
           </div>
-          {sidebarOpen && (
-            <div className="user-info">
-              <p className="user-name">{user?.user_metadata?.display_name || "User"}</p>
-              <p className="user-email">{user?.email}</p>
-            </div>
+        </motion.div>
+
+        <motion.div
+          className="stat-card"
+          whileHover={{ scale: 1.03 }}
+          transition={{ type: "spring", stiffness: 120 }}
+        >
+          <i className="bi bi-calendar-day stat-icon green"></i>
+          <div>
+            <h4>{todayVisits}</h4>
+            <p>Today’s Visits</p>
+          </div>
+        </motion.div>
+
+        <motion.div
+          className="stat-card"
+          whileHover={{ scale: 1.03 }}
+          transition={{ type: "spring", stiffness: 120 }}
+        >
+          <i className="bi bi-people stat-icon blue"></i>
+          <div>
+            <h4>{activeUsers}</h4>
+            <p>Active Users</p>
+          </div>
+        </motion.div>
+      </section>
+
+      {/* Template Viewer Card */}
+      <section className="dashboard-cards-grid mb-5">
+        <motion.div
+          className="dashboard-card"
+          whileHover={{ scale: 1.03 }}
+          onClick={() => navigate("/templates")}
+        >
+          <div className="dashboard-card-icon purple">
+            <i className="bi bi-grid"></i>
+          </div>
+          <div className="dashboard-card-content">
+            <h3 className="dashboard-card-title">View Templates</h3>
+            <p className="dashboard-card-description">
+              Explore free HTML5UP templates directly from your dashboard.
+            </p>
+          </div>
+          <div className="dashboard-card-arrow">
+            <i className="bi bi-arrow-right"></i>
+          </div>
+        </motion.div>
+      </section>
+
+      {/* Chart */}
+      <section className="chart-section mt-4">
+        <div className="chart-header d-flex justify-content-between align-items-center flex-wrap mb-3">
+          <div>
+            <h2 className="chart-title">Traffic Trends</h2>
+            <p className="chart-subtitle text-muted">
+              Total visits over time: {totalVisits}
+            </p>
+          </div>
+          {lastUpdated && (
+            <p className="text-muted small">Last updated at {lastUpdated}</p>
           )}
         </div>
 
-        {/* Navigation */}
-        <nav className="sidebar-nav">
-          <ul className="nav-list">
-            {menuItems.map((item) => (
-              <li key={item.path}>
-                <Link
-                  to={item.path}
-                  className={`nav-item ${isActive(item.path) ? "active" : ""}`}
-                  title={!sidebarOpen ? item.label : ""}
-                  onClick={handleNavClick}
-                >
-                  <i className={item.icon}></i>
-                  {sidebarOpen && <span>{item.label}</span>}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        {/* Footer Actions */}
-        <div className="sidebar-footer">
-          <button
-            className="nav-item logout-btn"
-            onClick={handleLogout}
-            title={!sidebarOpen ? "Logout" : ""}
-          >
-            <i className="bi bi-box-arrow-right"></i>
-            {sidebarOpen && <span>Logout</span>}
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="dashboard-main">
-        <div className="dashboard-header">
-          <div className="header-top">
-            <button
-              className="mobile-menu-btn"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              aria-label="Toggle menu"
+        {analytics.length === 0 ? (
+          <div className="empty-state text-center py-5">
+            <i className="bi bi-activity fs-1 mb-2"></i>
+            <p>No analytics data available yet.</p>
+            <p className="text-muted">Data will appear here once collected.</p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart
+              data={analytics}
+              margin={{ top: 10, right: 30, left: 0, bottom: 10 }}
             >
-              <i className="bi bi-list"></i>
-            </button>
-            <div>
-              <h1 className="dashboard-title">Dashboard Overview</h1>
-              <p className="dashboard-subtitle">
-                Welcome back, {user?.user_metadata?.display_name || user?.email || "User"}! 👋
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Cards */}
-        <div className="dashboard-cards-grid">
-          <div
-            className="dashboard-card"
-            onClick={() =>
-              document.querySelector(".chart-section")?.scrollIntoView({ behavior: "smooth" })
-            }
-          >
-            <div className="dashboard-card-icon">
-              <i className="bi bi-graph-up"></i>
-            </div>
-            <div className="dashboard-card-content">
-              <h3 className="dashboard-card-title">View Analytics</h3>
-              <p className="dashboard-card-description">
-                Track your portfolio performance and visitor engagement metrics
-              </p>
-            </div>
-            <div className="dashboard-card-arrow">
-              <i className="bi bi-arrow-right"></i>
-            </div>
-          </div>
-
-          <div className="dashboard-card" onClick={() => navigate("/ask-ai")}>
-            <div className="dashboard-card-icon improve-resume">
-              <i className="bi bi-file-earmark-check"></i>
-            </div>
-            <div className="dashboard-card-content">
-              <h3 className="dashboard-card-title">Improve your Resume</h3>
-              <p className="dashboard-card-description">
-                Get AI-powered suggestions to optimize your resume for better results
-              </p>
-            </div>
-            <div className="dashboard-card-arrow">
-              <i className="bi bi-arrow-right"></i>
-            </div>
-          </div>
-        </div>
-
-        {/* Chart Section */}
-        <div className="chart-section">
-          <div className="chart-header">
-            <h2 className="chart-title">Traffic Overview</h2>
-            <p className="chart-subtitle">Analytics data visualization</p>
-            {lastUpdated && (
-              <p className="text-muted small">Last updated at {lastUpdated}</p>
-            )}
-          </div>
-          {analytics.length === 0 ? (
-            <div className="empty-state">
-              <i className="bi bi-bar-chart"></i>
-              <p>No analytics data available yet.</p>
-              <p className="text-muted">Data will appear here once it's collected.</p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={400}>
-              <BarChart data={analytics}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                <XAxis
-                  dataKey="date"
-                  stroke="var(--text-secondary)"
-                  style={{ fontSize: "12px" }}
-                />
-                <YAxis
-                  stroke="var(--text-secondary)"
-                  style={{ fontSize: "12px" }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--card-bg)",
-                    border: "1px solid var(--border-color)",
-                    borderRadius: "8px",
-                  }}
-                />
-                <Legend />
-                <Bar
-                  dataKey="visits"
-                  fill="var(--accent-primary)"
-                  radius={[8, 8, 0, 0]}
-                  name="Visits"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </main>
+              <defs>
+                <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ec4899" stopOpacity={0.9} />
+                  <stop offset="100%" stopColor="#f472b6" stopOpacity={0.2} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="var(--border-color)"
+              />
+              <XAxis dataKey="date" stroke="var(--text-secondary)" />
+              <YAxis stroke="var(--text-secondary)" />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "var(--card-bg)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "8px",
+                }}
+              />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="visits"
+                stroke="url(#lineGradient)"
+                strokeWidth={3}
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+                name="Visits"
+                animationDuration={1000}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </section>
     </div>
   );
 }

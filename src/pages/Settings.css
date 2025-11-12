@@ -77,3 +77,29 @@
 .alert {
   margin: 0;
 }
+.settings-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+.settings-card {
+  max-width: 480px;
+  background: var(--card-bg);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  padding: 2rem;
+  color: var(--text-primary);
+  transition: all 0.3s ease;
+}
+
+.settings-card:hover {
+  transform: translateY(-2px);
+}
+
+.settings-page {
+  background: var(--bg-primary);
+  min-height: 100vh;
+}

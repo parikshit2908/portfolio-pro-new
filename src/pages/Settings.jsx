@@ -11,42 +11,100 @@ export default function Settings() {
   const [displayName, setDisplayName] = useState(
     user?.user_metadata?.display_name || ""
   );
+  const [avatarUrl, setAvatarUrl] = useState(
+    user?.user_metadata?.avatar_url || ""
+  );
   const [statusMsg, setStatusMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [uploading, setUploading] = useState(false);
 
+  // 🧩 Update display name (Auth + Profiles table)
   const handleUpdateProfile = async () => {
-    const { error } = await supabase.auth.updateUser({
-      data: { display_name: displayName },
-    });
-    if (error) setErrorMsg(error.message);
-    else setStatusMsg("Profile updated successfully.");
+    try {
+      setStatusMsg("");
+      setErrorMsg("");
+
+      // Update auth metadata
+      const { error: authError } = await supabase.auth.updateUser({
+        data: { display_name: displayName },
+      });
+      if (authError) throw authError;
+
+      // Update or insert in profiles table
+      const { error: dbError } = await supabase
+        .from("profiles")
+        .upsert(
+          { id: user.id, display_name: displayName, avatar_url: avatarUrl },
+          { onConflict: "id" }
+        );
+
+      if (dbError) throw dbError;
+
+      setStatusMsg("Profile updated successfully ✅");
+    } catch (error) {
+      setErrorMsg(error.message);
+    }
   };
 
+  // 🧠 Upload avatar to Supabase Storage
   const handleUploadPhoto = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setUploading(true);
-    const { data, error } = await supabase.storage
-      .from("avatars")
-      .upload(`users/${user.id}/avatar.${file.name.split(".").pop()}`, file, {
-        upsert: true,
-      });
-    if (error) setErrorMsg(error.message);
-    else {
-      const publicUrl = supabase.storage
+
+    try {
+      setUploading(true);
+      setStatusMsg("");
+      setErrorMsg("");
+
+      const fileExt = file.name.split(".").pop();
+      const filePath = `users/${user.id}/avatar.${fileExt}`;
+
+      // Upload file to storage bucket
+      const { data, error: uploadError } = await supabase.storage
         .from("avatars")
-        .getPublicUrl(data.path).data.publicUrl;
-      await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
-      setStatusMsg("Photo uploaded successfully.");
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: publicData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+
+      const publicUrl = publicData.publicUrl;
+
+      // Update in auth and profiles table
+      const { error: authError } = await supabase.auth.updateUser({
+        data: { avatar_url: publicUrl },
+      });
+      if (authError) throw authError;
+
+      await supabase
+        .from("profiles")
+        .upsert({ id: user.id, avatar_url: publicUrl });
+
+      setAvatarUrl(publicUrl);
+      setStatusMsg("Profile picture updated successfully ✅");
+    } catch (error) {
+      setErrorMsg(error.message);
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   };
 
+  // 🔑 Reset password
   const handlePasswordReset = async () => {
-    const { error } = await supabase.auth.resetPasswordForEmail(user.email);
-    if (error) setErrorMsg(error.message);
-    else setStatusMsg("Password reset email sent.");
+    try {
+      setStatusMsg("");
+      setErrorMsg("");
+
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email);
+      if (error) throw error;
+
+      setStatusMsg("Password reset email sent successfully ✅");
+    } catch (error) {
+      setErrorMsg(error.message);
+    }
   };
 
   return (
@@ -56,8 +114,35 @@ export default function Settings() {
           className="settings-card mx-auto"
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
         >
-          <h3>Account Settings</h3>
+          <h3 className="mb-4 text-center">Account Settings</h3>
+
+          {/* Avatar Preview */}
+          <div className="text-center mb-4">
+            <img
+              src={
+                avatarUrl ||
+                "https://cdn-icons-png.flaticon.com/512/847/847969.png"
+              }
+              alt="Profile"
+              className="settings-avatar mb-2"
+            />
+            <div>
+              <input
+                type="file"
+                id="avatarUpload"
+                className="d-none"
+                onChange={handleUploadPhoto}
+                disabled={uploading}
+              />
+              <label htmlFor="avatarUpload" className="btn btn-outline-primary">
+                {uploading ? "Uploading..." : "Change Photo"}
+              </label>
+            </div>
+          </div>
+
+          {/* Display Name */}
           <div className="mb-4">
             <label className="form-label">Display Name</label>
             <input
@@ -69,33 +154,38 @@ export default function Settings() {
               className="btn btn-primary mt-2"
               onClick={handleUpdateProfile}
             >
-              Save
+              Save Changes
             </button>
           </div>
 
+          {/* Password Reset */}
           <div className="mb-4">
-            <label className="form-label">Profile Picture</label>
-            <input type="file" onChange={handleUploadPhoto} disabled={uploading} />
-          </div>
-
-          <div className="mb-4">
-            <button className="btn btn-warning" onClick={handlePasswordReset}>
-              Send Password Reset
+            <button
+              className="btn btn-warning w-100"
+              onClick={handlePasswordReset}
+            >
+              Send Password Reset Email
             </button>
           </div>
 
+          {/* Theme Toggle */}
           <div className="mb-4">
-            <button className="btn btn-outline-dark" onClick={toggleTheme}>
+            <button
+              className="btn btn-outline-dark w-100"
+              onClick={toggleTheme}
+            >
               Toggle {theme === "light" ? "Dark" : "Light"} Mode
             </button>
           </div>
 
+          {/* Logout */}
           <div className="mb-4">
-            <button className="btn btn-danger" onClick={() => logout()}>
+            <button className="btn btn-danger w-100" onClick={logout}>
               Logout
             </button>
           </div>
 
+          {/* Status Messages */}
           {statusMsg && <div className="alert alert-success">{statusMsg}</div>}
           {errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
         </motion.div>

@@ -10,50 +10,68 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 // Components
 import ProtectedRoute from "./components/ProtectedRoute";
 
-// Pages
+// Pages (Public)
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import Contact from "./pages/Contact";
+import PublicPortfolio from "./pages/PublicPortfolio"; // ⭐ NEW
+
+// Pages (Protected)
 import Dashboard from "./pages/Dashboard";
 import AskAI from "./pages/AskAI";
-import Contact from "./pages/Contact";
-import PortfolioForm from "./pages/PortfolioForm";
 import Settings from "./pages/Settings";
 import UploadResume from "./pages/UploadResume";
 import UploadPortfolio from "./pages/UploadPortfolio";
-import GetInspired from "./pages/GetInspired"; // ✅ NEW PAGE IMPORT
+import GetInspired from "./pages/GetInspired";
+
+// Portfolio Builder Pages
+import Templates from "./pages/Templates";
+import CreatePortfolio from "./pages/CreatePortfolio";
+import EditPortfolio from "./pages/EditPortfolio";
 
 const App = () => {
   const location = useLocation();
 
-  // Hide Navbar & Footer on specific pages
+  // Full-screen pages that hide Navbar & Footer
   const hideNavbarRoutes = [
     "/login",
     "/signup",
-    "/create-portfolio",
     "/dashboard",
+    "/create-portfolio",
+    "/edit-portfolio",
     "/ask-ai",
     "/settings",
     "/upload-resume",
     "/upload-portfolio",
-    "/get-inspired", // ✅ Added to hide Navbar if desired (remove if you want Navbar visible here)
+    "/get-inspired",
+    "/templates",
   ];
 
-  const shouldHideNavbar = hideNavbarRoutes.includes(location.pathname);
+  // Also hide navbar/footer on public portfolio pages like /u/username
+  const isPublicPortfolio = location.pathname.startsWith("/u/");
+
+  const shouldHideNavbar =
+    hideNavbarRoutes.includes(location.pathname) || isPublicPortfolio;
 
   return (
     <ThemeProvider>
-      {/* ✅ Show Navbar only when needed */}
+      {/* Show Navbar only when needed */}
       {!shouldHideNavbar && <Navbar />}
 
       <Routes>
-        {/* 🌐 Public Routes */}
+        {/* PUBLIC ROUTES */}
         <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
         <Route path="/contact" element={<Contact />} />
 
-        {/* 🔐 Protected Routes */}
+        {/* Auth Pages */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+
+        {/* PUBLIC PORTFOLIO VIEWER */}
+        <Route path="/u/:username" element={<PublicPortfolio />} />
+
+        {/* PROTECTED ROUTES */}
         <Route
           path="/dashboard"
           element={
@@ -63,33 +81,35 @@ const App = () => {
           }
         />
 
+        {/* Portfolio Builder */}
+        <Route
+          path="/templates"
+          element={
+            <ProtectedRoute>
+              <Templates />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/create-portfolio"
           element={
             <ProtectedRoute>
-              <PortfolioForm />
+              <CreatePortfolio />
             </ProtectedRoute>
           }
         />
 
         <Route
-          path="/ask-ai"
+          path="/edit-portfolio"
           element={
             <ProtectedRoute>
-              <AskAI />
+              <EditPortfolio />
             </ProtectedRoute>
           }
         />
 
-        <Route
-          path="/settings"
-          element={
-            <ProtectedRoute>
-              <Settings />
-            </ProtectedRoute>
-          }
-        />
-
+        {/* Resume / Portfolio Upload */}
         <Route
           path="/upload-resume"
           element={
@@ -108,7 +128,17 @@ const App = () => {
           }
         />
 
-        {/* 💡 New Get Inspired Route */}
+        {/* Improve Resume AI */}
+        <Route
+          path="/ask-ai"
+          element={
+            <ProtectedRoute>
+              <AskAI />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Get Inspired (Templates list) */}
         <Route
           path="/get-inspired"
           element={
@@ -118,11 +148,11 @@ const App = () => {
           }
         />
 
-        {/* 🧭 Fallback Route */}
+        {/* 404 → Login */}
         <Route path="*" element={<Login />} />
       </Routes>
 
-      {/* ✅ Hide Footer when Navbar is hidden */}
+      {/* Show Footer only when Navbar is visible */}
       {!shouldHideNavbar && <Footer />}
     </ThemeProvider>
   );
