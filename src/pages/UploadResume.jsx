@@ -1,12 +1,11 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { storage } from "../firebase/config";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { supabase } from "../supabase/config";
 import { useAuth } from "../contexts/AuthContext";
 import "bootstrap-icons/font/bootstrap-icons.css";
 import "./UploadResume.css";
 
-const UploadResume = () => {
+export default function UploadResume() {
   const { user } = useAuth();
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -15,35 +14,48 @@ const UploadResume = () => {
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      if (selectedFile.type === "application/pdf" || selectedFile.type.includes("doc")) {
-        setFile(selectedFile);
-        setErrorMsg("");
-      } else {
-        setErrorMsg("Please upload a PDF or DOC file.");
-      }
+    if (!selectedFile) return;
+    if (
+      selectedFile.type === "application/pdf" ||
+      selectedFile.type.includes("word")
+    ) {
+      setFile(selectedFile);
+      setErrorMsg("");
+    } else {
+      setErrorMsg("Please upload only PDF or Word (DOC/DOCX) files.");
     }
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!file || !user) return;
+    if (!file || !user) {
+      setErrorMsg("Please select a file and make sure you’re logged in.");
+      return;
+    }
 
     setUploading(true);
     setStatusMsg("");
     setErrorMsg("");
 
     try {
-      const storageRef = ref(storage, `users/${user.uid}/resume.${file.name.split(".").pop()}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      // Upload to Supabase storage (bucket: resumes)
+      const filePath = `users/${user.id}/resume.${file.name.split(".").pop()}`;
+      const { data, error } = await supabase.storage
+        .from("resumes")
+        .upload(filePath, file, { upsert: true });
+
+      if (error) throw error;
+
+      // Get public URL
+      const publicUrl = supabase.storage.from("resumes").getPublicUrl(data.path)
+        .data.publicUrl;
+
       setStatusMsg("Resume uploaded successfully!");
+      console.log("Public URL:", publicUrl);
       setFile(null);
-      // Reset file input
-      e.target.reset();
     } catch (err) {
       console.error("Upload error:", err);
-      setErrorMsg("Failed to upload resume. Please try again.");
+      setErrorMsg("Upload failed. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -60,7 +72,7 @@ const UploadResume = () => {
           <div className="upload-header">
             <i className="bi bi-file-earmark-arrow-up"></i>
             <h2>Upload Resume</h2>
-            <p>Upload your resume in PDF or DOC format</p>
+            <p>Upload your resume (PDF or DOC)</p>
           </div>
 
           <form onSubmit={handleUpload} className="upload-form">
@@ -75,8 +87,8 @@ const UploadResume = () => {
               />
               <label htmlFor="resume-upload" className="upload-label">
                 <i className="bi bi-cloud-upload"></i>
-                <span>{file ? file.name : "Choose file or drag it here"}</span>
-                <small>PDF, DOC, or DOCX (Max 10MB)</small>
+                <span>{file ? file.name : "Choose file or drag here"}</span>
+                <small>Supported: PDF, DOC, DOCX</small>
               </label>
             </div>
 
@@ -101,7 +113,10 @@ const UploadResume = () => {
             >
               {uploading ? (
                 <>
-                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                  <span
+                    className="spinner-border spinner-border-sm me-2"
+                    role="status"
+                  ></span>
                   Uploading...
                 </>
               ) : (
@@ -116,8 +131,4 @@ const UploadResume = () => {
       </div>
     </div>
   );
-};
-
-export default UploadResume;
-
-
+}

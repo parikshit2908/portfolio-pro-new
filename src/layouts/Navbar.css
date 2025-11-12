@@ -145,3 +145,22 @@
     font-weight: 500;
     font-size: 0.95rem;
 }
+.active-nav {
+    color: var(--accent-primary) !important;
+    font-weight: 600;
+    position: relative;
+  }
+  
+  .active-nav::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60%;
+    height: 2px;
+    background-color: var(--accent-primary);
+    border-radius: 10px;
+    transition: width 0.3s ease;
+  }
+  

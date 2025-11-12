@@ -1,82 +1,63 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { storage } from "../firebase/config";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { supabase } from "../supabase/config";
 import { useAuth } from "../contexts/AuthContext";
 import "bootstrap-icons/font/bootstrap-icons.css";
 import "./UploadPortfolio.css";
 
-const UploadPortfolio = () => {
+export default function UploadPortfolio() {
   const { user } = useAuth();
   const [file, setFile] = useState(null);
   const [portfolioUrl, setPortfolioUrl] = useState("");
+  const [uploadType, setUploadType] = useState("file");
   const [uploading, setUploading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-  const [uploadType, setUploadType] = useState("file"); // "file" or "url"
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
-      if (selectedFile.type === "application/zip" || selectedFile.name.endsWith(".zip")) {
+      if (selectedFile.name.endsWith(".zip")) {
         setFile(selectedFile);
         setErrorMsg("");
       } else {
-        setErrorMsg("Please upload a ZIP file.");
+        setErrorMsg("Please upload a ZIP file only.");
       }
-    }
-  };
-
-  const handleUrlChange = (e) => {
-    setPortfolioUrl(e.target.value);
-    setErrorMsg("");
-  };
-
-  const isValidUrl = (url) => {
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
     }
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!user) return;
-
     setUploading(true);
     setStatusMsg("");
     setErrorMsg("");
 
     try {
       if (uploadType === "file") {
-        if (!file) {
-          setErrorMsg("Please select a file to upload.");
-          setUploading(false);
-          return;
-        }
-        const storageRef = ref(storage, `users/${user.uid}/portfolio.${file.name.split(".").pop()}`);
-        await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
-        setStatusMsg("Portfolio uploaded successfully!");
-        setFile(null);
-        e.target.reset();
+        if (!file) throw new Error("No file selected");
+        const filePath = `users/${user.id}/portfolio.${file.name.split(".").pop()}`;
+        const { data, error } = await supabase.storage
+          .from("portfolios")
+          .upload(filePath, file, { upsert: true });
+        if (error) throw error;
+
+        const publicUrl = supabase.storage
+          .from("portfolios")
+          .getPublicUrl(data.path).data.publicUrl;
+        setStatusMsg("Portfolio ZIP uploaded successfully!");
+        console.log("Portfolio URL:", publicUrl);
       } else {
-        if (!portfolioUrl || !isValidUrl(portfolioUrl)) {
-          setErrorMsg("Please enter a valid URL.");
-          setUploading(false);
-          return;
-        }
-        // Here you would save the URL to Firestore
+        if (!portfolioUrl.trim()) throw new Error("Enter a valid URL");
         setStatusMsg("Portfolio URL saved successfully!");
-        setPortfolioUrl("");
+        console.log("Linked URL:", portfolioUrl);
       }
     } catch (err) {
-      console.error("Upload error:", err);
-      setErrorMsg("Failed to upload portfolio. Please try again.");
+      console.error(err);
+      setErrorMsg(err.message);
     } finally {
       setUploading(false);
+      setFile(null);
+      setPortfolioUrl("");
     }
   };
 
@@ -91,7 +72,7 @@ const UploadPortfolio = () => {
           <div className="upload-header">
             <i className="bi bi-cloud-upload"></i>
             <h2>Upload Portfolio</h2>
-            <p>Upload your portfolio files or link to an existing portfolio</p>
+            <p>Upload a ZIP file or link an online portfolio</p>
           </div>
 
           <div className="upload-type-selector">
@@ -124,21 +105,22 @@ const UploadPortfolio = () => {
                 />
                 <label htmlFor="portfolio-upload" className="upload-label">
                   <i className="bi bi-cloud-upload"></i>
-                  <span>{file ? file.name : "Choose ZIP file or drag it here"}</span>
-                  <small>ZIP file containing your portfolio (Max 50MB)</small>
+                  <span>{file ? file.name : "Choose ZIP file or drag here"}</span>
+                  <small>ZIP files only</small>
                 </label>
               </div>
             ) : (
               <div className="url-input-area">
-                <label htmlFor="portfolio-url" className="form-label">Portfolio URL</label>
+                <label htmlFor="portfolio-url" className="form-label">
+                  Portfolio URL
+                </label>
                 <input
                   type="url"
                   id="portfolio-url"
                   value={portfolioUrl}
-                  onChange={handleUrlChange}
+                  onChange={(e) => setPortfolioUrl(e.target.value)}
                   placeholder="https://your-portfolio.com"
                   className="form-control"
-                  disabled={uploading}
                 />
               </div>
             )}
@@ -160,12 +142,12 @@ const UploadPortfolio = () => {
             <button
               type="submit"
               className="btn-upload-primary"
-              disabled={uploading || (uploadType === "file" && !file) || (uploadType === "url" && !portfolioUrl)}
+              disabled={uploading || (uploadType === "file" && !file)}
             >
               {uploading ? (
                 <>
-                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                  {uploadType === "file" ? "Uploading..." : "Saving..."}
+                  <span className="spinner-border spinner-border-sm me-2"></span>
+                  Uploading...
                 </>
               ) : (
                 <>
@@ -179,8 +161,4 @@ const UploadPortfolio = () => {
       </div>
     </div>
   );
-};
-
-export default UploadPortfolio;
-
-
+}

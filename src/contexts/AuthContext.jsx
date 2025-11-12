@@ -1,125 +1,94 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  signOut,
-  updateProfile
-} from 'firebase/auth';
-import { auth } from '../firebase/config';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { supabase } from "../supabase/config";
 
 const AuthContext = createContext();
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    // Listen for authentication state changes
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        // Extract first name from displayName or email
-        let firstName = '';
-        if (firebaseUser.displayName) {
-          // Get first name from displayName (split by space and take first part)
-          firstName = firebaseUser.displayName.split(' ')[0];
-        } else if (firebaseUser.email) {
-          // Extract first name from email (before @, then before .)
-          firstName = firebaseUser.email.split('@')[0].split('.')[0];
-          // Capitalize first letter
-          firstName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
-        }
-        
-        // User is signed in
-        setUser({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0],
-          firstName: firstName,
-          photoURL: firebaseUser.photoURL
-        });
-        setIsAuthenticated(true);
-      } else {
-        // User is signed out
-        setUser(null);
-        setIsAuthenticated(false);
-      }
-      setLoading(false);
-    });
+    let ignore = false;
 
-    // Cleanup subscription on unmount
-    return () => unsubscribe();
+    const initSession = async () => {
+      // 1️⃣ Get current session
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) console.error("Session fetch error:", error.message);
+      if (!ignore) {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+      }
+
+      // 2️⃣ Listen to changes (login, logout, token refresh)
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, newSession) => {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+      });
+
+      return () => {
+        ignore = true;
+        subscription.unsubscribe();
+      };
+    };
+
+    initSession();
   }, []);
 
-  // Login function using Firebase
+  // 🔐 LOGIN
   const login = async (email, password) => {
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      return { success: true, user: userCredential.user };
-    } catch (error) {
-      // Extract error code from Firebase error
-      console.error('Firebase login error:', error);
-      const errorCode = error.code || error.message || 'Unknown error';
-      const errorMessage = error.message || 'An error occurred during login';
-      return { success: false, error: errorCode, errorMessage: errorMessage };
-    }
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) return { success: false, error: error.message };
+    setUser(data.user);
+    return { success: true, user: data.user };
   };
 
-  // Signup function using Firebase
+  // 🆕 SIGNUP
   const signup = async (email, password, displayName) => {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Update the user's display name
-      if (displayName) {
-        await updateProfile(userCredential.user, {
-          displayName: displayName
-        });
-      }
-      
-      return { success: true, user: userCredential.user };
-    } catch (error) {
-      // Extract error code from Firebase error
-      console.error('Firebase signup error:', error);
-      const errorCode = error.code || error.message || 'Unknown error';
-      const errorMessage = error.message || 'An error occurred during signup';
-      return { success: false, error: errorCode, errorMessage: errorMessage };
-    }
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { display_name: displayName } },
+    });
+    if (error) return { success: false, error: error.message };
+    setUser(data.user);
+    return { success: true, user: data.user };
   };
 
-  // Logout function using Firebase
+  // 🚪 LOGOUT
   const logout = async () => {
-    try {
-      await signOut(auth);
-      // State will be automatically updated by onAuthStateChanged
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+    const { error } = await supabase.auth.signOut();
+    if (error) return { success: false, error: error.message };
+    setUser(null);
+    setSession(null);
+    return { success: true };
   };
 
   const value = {
     user,
-    isAuthenticated,
+    session,
     loading,
+    isAuthenticated: !!user,
     login,
     signup,
-    logout
+    logout,
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 };
-

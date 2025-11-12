@@ -21,12 +21,12 @@ import PortfolioForm from "./pages/PortfolioForm";
 import Settings from "./pages/Settings";
 import UploadResume from "./pages/UploadResume";
 import UploadPortfolio from "./pages/UploadPortfolio";
-import CustomizeTemplates from "./pages/CustomizeTemplates";
+import GetInspired from "./pages/GetInspired"; // ✅ NEW PAGE IMPORT
 
 const App = () => {
   const location = useLocation();
 
-  // Hide Navbar & Footer for routes that have their own layout
+  // Hide Navbar & Footer on specific pages
   const hideNavbarRoutes = [
     "/login",
     "/signup",
@@ -36,8 +36,9 @@ const App = () => {
     "/settings",
     "/upload-resume",
     "/upload-portfolio",
-    "/customize-templates",
+    "/get-inspired", // ✅ Added to hide Navbar if desired (remove if you want Navbar visible here)
   ];
+
   const shouldHideNavbar = hideNavbarRoutes.includes(location.pathname);
 
   return (
@@ -46,13 +47,13 @@ const App = () => {
       {!shouldHideNavbar && <Navbar />}
 
       <Routes>
-        {/* Public routes */}
+        {/* 🌐 Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/contact" element={<Contact />} />
 
-        {/* ✅ Protected routes */}
+        {/* 🔐 Protected Routes */}
         <Route
           path="/dashboard"
           element={
@@ -61,6 +62,7 @@ const App = () => {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/create-portfolio"
           element={
@@ -69,6 +71,7 @@ const App = () => {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/ask-ai"
           element={
@@ -77,6 +80,7 @@ const App = () => {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/settings"
           element={
@@ -85,6 +89,7 @@ const App = () => {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/upload-resume"
           element={
@@ -93,6 +98,7 @@ const App = () => {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/upload-portfolio"
           element={
@@ -101,16 +107,18 @@ const App = () => {
             </ProtectedRoute>
           }
         />
+
+        {/* 💡 New Get Inspired Route */}
         <Route
-          path="/customize-templates"
+          path="/get-inspired"
           element={
             <ProtectedRoute>
-              <CustomizeTemplates />
+              <GetInspired />
             </ProtectedRoute>
           }
         />
 
-        {/* Fallback route */}
+        {/* 🧭 Fallback Route */}
         <Route path="*" element={<Login />} />
       </Routes>
 

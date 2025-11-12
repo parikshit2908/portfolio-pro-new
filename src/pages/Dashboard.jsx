@@ -1,10 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { onSnapshot, collection } from "firebase/firestore";
-import { db } from "../firebase/config";
 import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../supabase/config";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  Legend,
 } from "recharts";
 import "bootstrap-icons/font/bootstrap-icons.css";
 import "./Dashboard.css";
@@ -19,69 +25,65 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Close sidebar on mobile when route changes
+  // Sidebar responsive toggle
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 992) {
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(true);
-      }
+      setSidebarOpen(window.innerWidth >= 992);
     };
-
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Close sidebar when clicking on a link on mobile
   const handleNavClick = () => {
-    if (window.innerWidth < 992) {
-      setSidebarOpen(false);
-    }
+    if (window.innerWidth < 992) setSidebarOpen(false);
   };
 
+  // 🔄 Fetch analytics data from Supabase
   useEffect(() => {
-    // Real-time listener for analytics collection
-    const unsub = onSnapshot(
-      collection(db, "analytics"),
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setAnalytics(data);
+    const fetchAnalytics = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("analytics")
+          .select("*")
+          .order("date", { ascending: true });
 
-        // Basic totals
+        if (error) throw error;
+
+        setAnalytics(data || []);
         setTotalUsers(data.length);
         const visits = data.reduce((sum, item) => sum + (item.visits || 0), 0);
         setTotalVisits(visits);
         setLastUpdated(new Date().toLocaleTimeString());
-      },
-      (error) => {
-        console.error("Error fetching analytics:", error);
-        // Set defaults if error occurs
+      } catch (err) {
+        console.error("Error fetching analytics:", err.message);
         setAnalytics([]);
         setTotalUsers(0);
         setTotalVisits(0);
       }
-    );
+    };
 
-    return () => unsub();
+    fetchAnalytics();
+
+    // Optional: real-time updates if you want live analytics
+    const channel = supabase
+      .channel("analytics-updates")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "analytics" },
+        () => fetchAnalytics()
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
   }, []);
 
   const handleLogout = async () => {
-    try {
-      await logout();
-      navigate("/");
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
+    await logout();
+    navigate("/");
   };
 
-  const isActive = (path) => {
-    return location.pathname === path;
-  };
+  const isActive = (path) => location.pathname === path;
 
   const menuItems = [
     { path: "/create-portfolio", icon: "bi-file-earmark-plus", label: "Create Portfolio" },
@@ -120,15 +122,15 @@ export default function Dashboard() {
         {/* User Info */}
         <div className="sidebar-user">
           <div className="user-avatar">
-            {user?.photoURL ? (
-              <img src={user.photoURL} alt={user.name} />
+            {user?.user_metadata?.avatar_url ? (
+              <img src={user.user_metadata.avatar_url} alt={user.user_metadata.display_name} />
             ) : (
               <i className="bi bi-person-circle"></i>
             )}
           </div>
           {sidebarOpen && (
             <div className="user-info">
-              <p className="user-name">{user?.firstName || user?.name || "User"}</p>
+              <p className="user-name">{user?.user_metadata?.display_name || "User"}</p>
               <p className="user-email">{user?.email}</p>
             </div>
           )}
@@ -179,18 +181,20 @@ export default function Dashboard() {
             </button>
             <div>
               <h1 className="dashboard-title">Dashboard Overview</h1>
-              <p className="dashboard-subtitle">Welcome back, {user?.firstName || user?.name || "User"}! 👋</p>
+              <p className="dashboard-subtitle">
+                Welcome back, {user?.user_metadata?.display_name || user?.email || "User"}! 👋
+              </p>
             </div>
           </div>
         </div>
 
         {/* Action Cards */}
         <div className="dashboard-cards-grid">
-          <div 
-            className="dashboard-card" 
-            onClick={() => {
-              document.querySelector('.chart-section')?.scrollIntoView({ behavior: 'smooth' });
-            }}
+          <div
+            className="dashboard-card"
+            onClick={() =>
+              document.querySelector(".chart-section")?.scrollIntoView({ behavior: "smooth" })
+            }
           >
             <div className="dashboard-card-icon">
               <i className="bi bi-graph-up"></i>
@@ -227,6 +231,9 @@ export default function Dashboard() {
           <div className="chart-header">
             <h2 className="chart-title">Traffic Overview</h2>
             <p className="chart-subtitle">Analytics data visualization</p>
+            {lastUpdated && (
+              <p className="text-muted small">Last updated at {lastUpdated}</p>
+            )}
           </div>
           {analytics.length === 0 ? (
             <div className="empty-state">
@@ -238,12 +245,12 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height={400}>
               <BarChart data={analytics}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                <XAxis 
-                  dataKey="date" 
+                <XAxis
+                  dataKey="date"
                   stroke="var(--text-secondary)"
                   style={{ fontSize: "12px" }}
                 />
-                <YAxis 
+                <YAxis
                   stroke="var(--text-secondary)"
                   style={{ fontSize: "12px" }}
                 />
@@ -255,9 +262,9 @@ export default function Dashboard() {
                   }}
                 />
                 <Legend />
-                <Bar 
-                  dataKey="visits" 
-                  fill="var(--accent-primary)" 
+                <Bar
+                  dataKey="visits"
+                  fill="var(--accent-primary)"
                   radius={[8, 8, 0, 0]}
                   name="Visits"
                 />

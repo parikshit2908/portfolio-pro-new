@@ -1,196 +1,174 @@
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
 import "./Navbar.css";
 
-const NavBar = () => {
+const Navbar = () => {
   const { theme, toggleTheme } = useTheme();
   const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
-
-  const handleProtectedLink = (e, path) => {
-    if (!isAuthenticated) {
-      e.preventDefault();
-      navigate("/login");
-    }
-  };
+  const location = useLocation();
 
   const handleLogout = async () => {
     const result = await logout();
     if (result.success) {
-      navigate("/");
+      navigate("/login");
     }
   };
 
-  // Framer Motion variant for main CTA button
+  // Active route highlighting
+  const isActive = (path) => location.pathname === path;
+
+  // Animation variants
   const buttonVariants = {
     rest: { scale: 1 },
-    hover: {
-      scale: 1.05,
-      transition: { duration: 0.2 },
-    },
+    hover: { scale: 1.05, transition: { duration: 0.2 } },
   };
 
-  // Framer Motion variant for text links
   const linkVariants = {
     rest: { opacity: 1 },
     hover: { opacity: 0.8, transition: { duration: 0.2 } },
   };
 
-  // Theme toggle animation variant
   const themeToggleVariants = {
     rest: { rotate: 0 },
     hover: { rotate: 15, scale: 1.1, transition: { duration: 0.2 } },
   };
 
   return (
-    // Bootstrap Navbar component
     <motion.nav
       className="navbar navbar-expand-lg custom-navbar-bg sticky-top"
       initial={{ y: -50, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ type: "spring", stiffness: 100, delay: 0.1 }}
     >
-      <div className="container-fluid px-5">
-        {/* 1. Left Section: Website Logo */}
-        <Link
-          to="/"
-          className="navbar-brand me-5 fw-bold"
-          style={{ color: "#4A4E69", fontSize: "1.5rem" }}
-        >
+      <div className="container-fluid px-4">
+        {/* Brand */}
+        <Link to="/" className="navbar-brand fw-bold">
           PortfolioPro
         </Link>
 
+        {/* Toggler for mobile */}
         <button
           className="navbar-toggler"
           type="button"
           data-bs-toggle="collapse"
-          data-bs-target="#navbarNavAltMarkup"
-          aria-controls="navbarNavAltMarkup"
+          data-bs-target="#navbarNav"
+          aria-controls="navbarNav"
           aria-expanded="false"
           aria-label="Toggle navigation"
         >
           <span className="navbar-toggler-icon"></span>
         </button>
 
-        {/* 2. Center Links and Right Buttons (Collapsible) */}
-        <div className="collapse navbar-collapse" id="navbarNavAltMarkup">
-          {/* Center Links */}
-          <div className="navbar-nav mx-auto">
-            <motion.div
-              initial="rest"
-              whileHover="hover"
-              variants={linkVariants}
-              className="nav-item"
-            >
+        <div className="collapse navbar-collapse" id="navbarNav">
+          {/* Center navigation links */}
+          <div className="navbar-nav mx-auto d-flex align-items-center gap-2">
+            <motion.div initial="rest" whileHover="hover" variants={linkVariants}>
               <Link
                 to="/"
-                className="nav-link mx-3 custom-nav-link-color"
+                className={`nav-link mx-2 custom-nav-link-color ${
+                  isActive("/") ? "active-nav" : ""
+                }`}
               >
                 Home
               </Link>
             </motion.div>
-            <motion.div
-              initial="rest"
-              whileHover="hover"
-              variants={linkVariants}
-              className="nav-item"
-            >
+
+            <motion.div initial="rest" whileHover="hover" variants={linkVariants}>
               <Link
                 to="/dashboard"
-                className="nav-link mx-3 custom-nav-link-color"
-                onClick={(e) => handleProtectedLink(e, "/dashboard")}
+                className={`nav-link mx-2 custom-nav-link-color ${
+                  isActive("/dashboard") ? "active-nav" : ""
+                }`}
               >
                 Dashboard
               </Link>
             </motion.div>
-            <motion.div
-              initial="rest"
-              whileHover="hover"
-              variants={linkVariants}
-              className="nav-item"
-            >
+
+            <motion.div initial="rest" whileHover="hover" variants={linkVariants}>
               <Link
-                to="/ask-ai"
-                className="nav-link mx-3 custom-nav-link-color"
-                onClick={(e) => handleProtectedLink(e, "/ask-ai")}
+                to="/get-inspired"
+                className={`nav-link mx-2 custom-nav-link-color ${
+                  isActive("/get-inspired") ? "active-nav" : ""
+                }`}
               >
-                Ask AI
+                Get Inspired
               </Link>
             </motion.div>
-            <motion.div
-              initial="rest"
-              whileHover="hover"
-              variants={linkVariants}
-              className="nav-item"
-            >
+
+            <motion.div initial="rest" whileHover="hover" variants={linkVariants}>
+              <Link
+                to="/ask-ai"
+                className={`nav-link mx-2 custom-nav-link-color ${
+                  isActive("/ask-ai") ? "active-nav" : ""
+                }`}
+              >
+                Improve Resume
+              </Link>
+            </motion.div>
+
+            <motion.div initial="rest" whileHover="hover" variants={linkVariants}>
               <Link
                 to="/contact"
-                className="nav-link mx-3 custom-nav-link-color"
+                className={`nav-link mx-2 custom-nav-link-color ${
+                  isActive("/contact") ? "active-nav" : ""
+                }`}
               >
-                Contact
+                Contact Us
               </Link>
             </motion.div>
           </div>
 
-          {/* Right Section: Action Buttons */}
+          {/* Right section: theme toggle + auth */}
           <div className="d-flex align-items-center">
-            {/* Theme Toggle Button */}
+            {/* Theme toggle */}
             <motion.button
               className="btn theme-toggle-btn"
               onClick={toggleTheme}
               initial="rest"
               whileHover="hover"
               variants={themeToggleVariants}
-              aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+              aria-label={`Switch to ${
+                theme === "light" ? "dark" : "light"
+              } mode`}
             >
-              {theme === 'light' ? (
+              {theme === "light" ? (
                 <i className="bi bi-moon-stars-fill"></i>
               ) : (
                 <i className="bi bi-sun-fill"></i>
               )}
             </motion.button>
 
-            {/* Conditional rendering based on auth status */}
+            {/* Auth section */}
             {isAuthenticated ? (
-              <>
-                {/* User greeting */}
+              <div className="d-flex align-items-center">
                 <span className="me-3 user-greeting">
-                  Welcome, {user?.firstName || user?.name || (user?.email ? user.email.split('@')[0].split('.')[0] : 'User')}
+                  Hi,{" "}
+                  {user?.firstName ||
+                    user?.name ||
+                    user?.email?.split("@")[0]}
                 </span>
-                {/* Logout Button */}
                 <motion.button
                   onClick={handleLogout}
                   className="btn custom-login-btn fw-bold"
                   initial="rest"
                   whileHover="hover"
-                  variants={linkVariants}
+                  variants={buttonVariants}
                 >
                   Logout
                 </motion.button>
-              </>
+              </div>
             ) : (
               <>
-                {/* Login Button */}
-                <motion.div
-                  initial="rest"
-                  whileHover="hover"
-                  variants={linkVariants}
-                  className="me-3"
-                >
+                <motion.div initial="rest" whileHover="hover" variants={linkVariants} className="me-3">
                   <Link to="/login" className="btn custom-login-btn fw-bold">
                     Login
                   </Link>
                 </motion.div>
-
-                {/* Create Portfolio Button (Primary CTA) */}
-                <motion.div
-                  initial="rest"
-                  whileHover="hover"
-                  variants={buttonVariants}
-                >
+                <motion.div initial="rest" whileHover="hover" variants={buttonVariants}>
                   <Link to="/signup" className="btn custom-cta-btn fw-bold">
                     Create Your Portfolio
                   </Link>
@@ -204,4 +182,4 @@ const NavBar = () => {
   );
 };
 
-export default NavBar;
+export default Navbar;
