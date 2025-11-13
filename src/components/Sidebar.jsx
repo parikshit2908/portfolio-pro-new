@@ -11,10 +11,19 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
   const { theme } = useTheme();
   const location = useLocation();
 
+  const username =
+    user?.user_metadata?.username ||
+    user?.email?.split("@")[0] ||
+    "user";
+
   const menuItems = [
     { path: "/", label: "Home", icon: "bi-house" },
-    { path: "/dashboard", label: "Dashboard", icon: "bi-kanban" },
+    { path: "/dashboard", label: "My Dashboard", icon: "bi-graph-up" },
+    { path: "/templates", label: "View Templates", icon: "bi-columns" },
+    { path: "/create-portfolio", label: "Build Portfolio", icon: "bi-brush" },
+    { path: `/u/${username}`, label: "My Public Portfolio", icon: "bi-person-bounding-box" },
     { path: "/get-inspired", label: "Get Inspired", icon: "bi-lightbulb" },
+    { path: "/ask-ai", label: "Improve Resume AI", icon: "bi-stars" },
     { path: "/upload-resume", label: "Upload Resume", icon: "bi-file-earmark-arrow-up" },
     { path: "/upload-portfolio", label: "Upload Portfolio", icon: "bi-cloud-upload" },
     { path: "/settings", label: "Settings", icon: "bi-gear" },
@@ -28,7 +37,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Dim background overlay */}
+          {/* Overlay */}
           <motion.div
             className="sidebar-overlay"
             onClick={toggleSidebar}
@@ -37,19 +46,20 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
             exit={{ opacity: 0 }}
           />
 
-          {/* Sidebar panel */}
+          {/* Sidebar */}
           <motion.aside
             className={`universal-sidebar ${theme}`}
             initial={{ x: "-100%" }}
             animate={{ x: 0 }}
             exit={{ x: "-100%" }}
-            transition={{ type: "spring", stiffness: 110, damping: 18 }}
+            transition={{ type: "spring", stiffness: 105, damping: 18 }}
           >
             {/* Header */}
             <div className="sidebar-header">
               <h2 className="sidebar-logo">
                 <i className="bi bi-kanban"></i> PortfolioPro
               </h2>
+
               <button className="sidebar-close" onClick={toggleSidebar}>
                 <i className="bi bi-x-lg"></i>
               </button>
@@ -68,16 +78,17 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
                     <i className="bi bi-person-circle"></i>
                   )}
                 </div>
+
                 <div className="sidebar-user-details">
                   <p className="user-name">
-                    {user.user_metadata?.display_name || "User"}
+                    {user.user_metadata?.display_name || username}
                   </p>
                   <p className="user-email">{user.email}</p>
                 </div>
               </div>
             )}
 
-            {/* Navigation Links */}
+            {/* Menu */}
             <nav className="sidebar-nav">
               {menuItems.map((item) => (
                 <Link

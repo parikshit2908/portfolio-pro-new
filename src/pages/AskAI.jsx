@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../supabase/config";
+import { gemini } from "../ai/gemini";
 import { jsPDF } from "jspdf";
 import * as pdfjsLib from "pdfjs-dist";
 import "pdfjs-dist/build/pdf.worker.mjs";
@@ -12,8 +13,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-const FUNC_BASE = "https://us-central1/YOUR_PROJECT.cloudfunctions.net";
-
 export default function AskAI() {
   const { user } = useAuth();
   const [resumeText, setResumeText] = useState("");
@@ -21,8 +20,6 @@ export default function AskAI() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [fileName, setFileName] = useState("");
-
-  const FUNC_SECRET = import.meta.env.VITE_FUNC_SECRET || "";
 
   // 📄 Extract text from PDF or TXT
   const handleFileUpload = async (e) => {
@@ -47,18 +44,20 @@ export default function AskAI() {
       } else if (file.type === "text/plain") {
         const text = await file.text();
         setResumeText(text);
-      } else setError("Unsupported file type. Please upload PDF or TXT.");
+      } else {
+        setError("Unsupported file type. Upload PDF or TXT.");
+      }
     } catch {
-      setError("Failed to extract text. Try again.");
+      setError("Error reading file.");
     } finally {
       setLoading(false);
     }
   };
 
-  // 🤖 AI Analysis
+  // 🤖 ANALYZE USING GEMINI AI
   const handleAnalyze = async () => {
     if (!resumeText.trim()) {
-      setError("Please paste or upload your resume text first.");
+      setError("Please upload or paste your resume text.");
       return;
     }
 
@@ -67,40 +66,80 @@ export default function AskAI() {
     setResult(null);
 
     try {
-      const response = await fetch(`${FUNC_BASE}/analyzeResume`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-func-secret": FUNC_SECRET,
-        },
-        body: JSON.stringify({ resumeText }),
-      });
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error || "Analysis failed");
+      const prompt = `
+You are an ATS (Applicant Tracking System) resume evaluator.
 
-      setResult(data.result);
+Analyze the following resume and give:
+1. ATS Score (0–100)
+2. 4–5 line Summary of candidate
+3. Improvement Suggestions
+4. Top 10 Keywords they should add
 
-      // 💾 Save in Supabase
+Resume:
+${resumeText}
+`;
+
+      const aiResponse = await gemini.generateContent(prompt);
+      const text = aiResponse.response.text();
+
+      // Convert AI output into structured JSON
+      const parsed = parseGeminiATS(text);
+
+      setResult(parsed);
+
+      // Save to Supabase
       await supabase.from("atsReports").insert([
         {
           uid: user?.id || "guest",
           userName:
-            user?.user_metadata?.display_name || user?.email?.split("@")[0],
+            user?.user_metadata?.display_name ||
+            user?.email?.split("@")[0],
           fileName: fileName || "pasted_resume",
-          score: data.result.score,
-          summary: data.result.summary,
-          suggestions: data.result.suggestions || [],
-          keywords: data.result.top_keywords || [],
+          score: parsed.score,
+          summary: parsed.summary,
+          suggestions: parsed.suggestions,
+          keywords: parsed.keywords,
           created_at: new Date(),
         },
       ]);
     } catch (err) {
-      setError(err.message);
+      setError("AI Error: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
+  // Helper → Convert Gemini text into JSON
+  function parseGeminiATS(raw) {
+    let score = 0;
+    let summary = "";
+    let suggestions = [];
+    let keywords = [];
+
+    const scoreMatch = raw.match(/(Score|ATS Score)[:\- ]+(\d+)/i);
+    if (scoreMatch) score = parseInt(scoreMatch[2]);
+
+    const summaryMatch = raw.match(/Summary[:\- ]+([\s\S]*?)(Suggestions|Keywords|$)/i);
+    if (summaryMatch) summary = summaryMatch[1].trim();
+
+    const suggestionsMatch = raw.match(/Suggestions[:\- ]+([\s\S]*?)(Keywords|$)/i);
+    if (suggestionsMatch)
+      suggestions = suggestionsMatch[1]
+        .split(/\n|•|- /)
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+    const keywordsMatch = raw.match(/Keywords[:\- ]+([\s\S]*)/i);
+    if (keywordsMatch)
+      keywords = keywordsMatch[1]
+        .split(/,|\n/)
+        .map((k) => k.trim())
+        .filter(Boolean);
+
+    return { score, summary, suggestions, keywords };
+  }
+
+  // 📥 Download PDF
   const handleDownloadReport = () => {
     if (!result) return;
     const doc = new jsPDF();
@@ -116,32 +155,35 @@ export default function AskAI() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="askai-title">Improve Resume</h1>
           <p className="askai-subtitle">
-            Upload or paste your resume. The AI ATS Tracker will score and give
-            suggestions.
+            Upload or paste your resume text to get ATS Score, Improvements, Keywords & AI review.
           </p>
 
           <div className="ats-section mt-4">
-            <label className="form-label">Upload Resume</label>
+            <label className="form-label">Upload Resume (PDF/TXT)</label>
             <input
               type="file"
               accept=".pdf,.txt"
               className="form-control mb-3"
               onChange={handleFileUpload}
-              disabled={loading}
             />
+
             <label className="form-label">Or Paste Resume Text</label>
             <textarea
               className="form-control"
               rows="10"
-              placeholder="Paste your resume text here..."
               value={resumeText}
               onChange={(e) => setResumeText(e.target.value)}
+              placeholder="Paste your resume here..."
             />
-            <div className="d-flex gap-2 mt-3">
-              <button className="btn custom-cta-btn" onClick={handleAnalyze}>
-                {loading ? "Analyzing..." : "Run ATS Tracker"}
-              </button>
-            </div>
+
+            <button
+              className="btn custom-cta-btn mt-3"
+              onClick={handleAnalyze}
+              disabled={loading}
+            >
+              {loading ? "Analyzing..." : "Run ATS Tracker"}
+            </button>
+
             {error && <div className="alert alert-danger mt-3">{error}</div>}
           </div>
 
@@ -152,10 +194,18 @@ export default function AskAI() {
                   ATS Score: <span className="score">{result.score}</span>/100
                 </h3>
                 <p>{result.summary}</p>
-                <button
-                  className="btn btn-outline-primary mt-3"
-                  onClick={handleDownloadReport}
-                >
+
+                <h5 className="mt-3">Suggestions</h5>
+                <ul>
+                  {result.suggestions.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ul>
+
+                <h5 className="mt-3">Keywords</h5>
+                <p>{result.keywords.join(", ")}</p>
+
+                <button className="btn btn-outline-primary mt-3" onClick={handleDownloadReport}>
                   Download Report
                 </button>
               </div>

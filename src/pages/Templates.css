@@ -5,7 +5,7 @@
 }
 
 .templates-title {
-  font-size: 2.2rem;
+  font-size: 2.3rem;
   font-weight: 700;
 }
 
@@ -14,17 +14,19 @@
   color: var(--text-secondary);
 }
 
+/* Grid layout */
 .templates-list {
   display: grid;
-  gap: 1.2rem;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.4rem;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
 }
 
+/* Template card */
 .template-item {
   background: var(--card-bg);
-  border-radius: 14px;
+  border-radius: 16px;
   border: 1px solid var(--border-color);
-  padding: 1.5rem;
+  padding: 1.7rem;
   box-shadow: var(--shadow-sm);
   transition: all 0.3s ease;
 }
@@ -35,8 +37,9 @@
   box-shadow: var(--shadow-md);
 }
 
+/* Title + description */
 .template-title {
-  font-size: 1.4rem;
+  font-size: 1.35rem;
   font-weight: 600;
   margin-bottom: 0.4rem;
 }
@@ -47,16 +50,27 @@
   margin-bottom: 1rem;
 }
 
-.template-btn {
-  background: var(--accent-primary);
-  color: white !important;
-  padding: 0.6rem 1rem;
-  border-radius: 8px;
-  font-weight: 600;
-  text-decoration: none;
-  transition: background 0.2s ease;
+/* Buttons */
+.template-actions {
+  display: flex;
+  gap: 0.8rem;
 }
 
-.template-btn:hover {
-  background: var(--accent-hover);
+.preview-btn {
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+}
+
+.use-btn {
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  font-weight: 600;
+}
+
+/* Mobile tweaks */
+@media (max-width: 576px) {
+  .template-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
 }
